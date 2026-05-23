@@ -1,0 +1,42 @@
+[
+  {
+    "rfi_id": "RFI-0184",
+    "submitted": "2026-05-21",
+    "discipline": "Concrete",
+    "trade": "Concrete Sub",
+    "references": ["Spec 03 30 00", "Drawing S-215"],
+    "question": "Drawing S-215 shows interior column cover at columns C-37 through C-42 (level L11 transition) callout missing. What is the required minimum cover, and is any deviation permitted at the L10-to-L11 transition?"
+  },
+  {
+    "rfi_id": "RFI-0185",
+    "submitted": "2026-05-21",
+    "discipline": "Structural Steel",
+    "trade": "Steel Erector",
+    "references": ["Spec 05 12 00", "AWS D1.1"],
+    "question": "Forecast for 5/23 morning is 28°F ambient. We have CJP field welds scheduled at column splice CL-302. Confirm preheat requirements and whether the welds can proceed."
+  },
+  {
+    "rfi_id": "RFI-0186",
+    "submitted": "2026-05-21",
+    "discipline": "Insulation / Envelope",
+    "trade": "Envelope Sub",
+    "references": ["Spec 07 21 00"],
+    "question": "We have a 1/4 in. gap between adjacent mineral fiber boards at L8 north elevation. Manufacturer rep on site says backer rod and sealant is acceptable up to 3/8 in. Confirm spec acceptance and any additional documentation required."
+  },
+  {
+    "rfi_id": "RFI-0187",
+    "submitted": "2026-05-22",
+    "discipline": "Doors and Frames",
+    "trade": "GC self-perform",
+    "references": ["Spec 08 11 13", "A-651"],
+    "question": "Hardware schedule HW-12 calls out a 4-1/2 in. mortise hinge that is on a 12-week lead. Sub proposes substituting an in-stock 5 in. mortise hinge of equal swing capacity. Is this substitution acceptable?"
+  },
+  {
+    "rfi_id": "RFI-0188",
+    "submitted": "2026-05-22",
+    "discipline": "Masonry",
+    "trade": "Masonry Sub",
+    "references": ["Spec 04 22 00"],
+    "question": "Per current schedule, mason needs to perform a 14 ft high-lift grout pour at stair shaft SS-3 west jamb to keep ahead of steel erection. Same constraint as RFI-0127 (SS-2). Requesting deviation."
+  }
+]

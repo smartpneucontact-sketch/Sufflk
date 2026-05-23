@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "site-copilot"
+version = "0.1.0"
+description = "Agentic RFI + Daily Report copilot for construction jobsites. Portfolio demo built for the Suffolk Site AI Engineer role."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Site Copilot author" }]
+
+dependencies = [
+    "anthropic>=0.40.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.6.0",
+    "rank-bm25>=0.2.2",
+    "pyyaml>=6.0.2",
+    "python-multipart>=0.0.12",
+    "httpx>=0.27.0",
+    "tenacity>=9.0.0",
+]
+
+[project.optional-dependencies]
+dense = [
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+]
+ui = [
+    "streamlit>=1.39.0",
+]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.7.0",
+    "mypy>=1.13.0",
+]
+
+[project.scripts]
+site-copilot-ingest = "site_copilot.rag.ingest:main"
+site-copilot-eval = "evals.run_evals:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/site_copilot"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+asyncio_mode = "auto"

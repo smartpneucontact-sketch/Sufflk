@@ -1,0 +1,67 @@
+# RFI eval cases. Each case is a synthetic incoming RFI plus expectations the
+# scorer will check. Designed to be exercisable in mock-LLM mode (the canned
+# mock response satisfies the spec-cover scenario), and gives real signal when
+# a real Anthropic key is set.
+
+- id: cover-001
+  description: Spec governs over drawing for column cover.
+  rfi:
+    rfi_id: RFI-EVAL-001
+    submitted: "2026-05-22"
+    discipline: Concrete
+    trade: Concrete Sub
+    references: ["Spec 03 30 00"]
+    question: "Drawing detail shows column cover at 1-1/4 in.; spec calls for 1-1/2 in. Which governs?"
+  expect:
+    must_cite_source_type: spec
+    urgency_in: [low, medium]
+    needs_eor_review: true
+    response_keywords_any: ["1-1/2", "spec governs", "specification"]
+    max_steps: 4
+
+- id: weld-cold-002
+  description: Cold-weather field welding requires preheat per AWS D1.1.
+  rfi:
+    rfi_id: RFI-EVAL-002
+    submitted: "2026-05-22"
+    discipline: Structural Steel
+    trade: Steel Erector
+    references: ["Spec 05 12 00", "AWS D1.1"]
+    question: "Forecast 28°F ambient overnight. Can CJP field welds proceed at column splice CL-302?"
+  expect:
+    must_cite_source_type: spec
+    urgency_in: [medium, high]
+    needs_eor_review: true
+    response_keywords_any: ["preheat", "32°F", "AWS D1.1"]
+    max_steps: 5
+
+- id: highlift-003
+  description: High-lift grouting beyond 12'8" is denied; precedent in RFI-0127.
+  rfi:
+    rfi_id: RFI-EVAL-003
+    submitted: "2026-05-22"
+    discipline: Masonry
+    trade: Masonry Sub
+    references: ["Spec 04 22 00"]
+    question: "Requesting 14 ft high-lift grout at stair shaft SS-3 west jamb. Same constraint as RFI-0127."
+  expect:
+    must_cite_source_type_any: [spec, prior_rfi]
+    urgency_in: [low, medium]
+    needs_eor_review: true
+    response_keywords_any: ["12'8", "12 ft 8", "ACI 530", "RFI-0127"]
+    max_steps: 5
+
+- id: insulation-awb-004
+  description: Insulation cannot proceed before AWB inspection sign-off; precedent RFI-0135.
+  rfi:
+    rfi_id: RFI-EVAL-004
+    submitted: "2026-05-22"
+    discipline: Insulation / Envelope
+    trade: Envelope Sub
+    references: ["Spec 07 21 00"]
+    question: "We have a 1/4 in. gap between adjacent mineral fiber boards at L8 north. Manufacturer rep says backer rod and sealant up to 3/8 in. OK. Confirm spec acceptance."
+  expect:
+    must_cite_source_type: spec
+    urgency_in: [low, medium]
+    response_keywords_any: ["1/8", "backer rod", "spray foam", "sealant"]
+    max_steps: 4

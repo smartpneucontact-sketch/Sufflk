@@ -1,0 +1,50 @@
+name: deploy
+
+# Stub workflow showing the prod-deploy shape. Filled in once an AWS account
+# and ECR/ECS targets exist. Kept here so reviewers see the LLMOps story end-to-end.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options: [staging, prod]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    permissions:
+      id-token: write  # for OIDC to AWS
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f infra/Dockerfile -t $ECR_REGISTRY/site-copilot:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/site-copilot:$IMAGE_TAG
+
+      - name: Terraform Init / Apply
+        working-directory: infra/terraform
+        run: |
+          terraform init -input=false
+          terraform apply -input=false -auto-approve \
+            -var "image_tag=${{ github.sha }}" \
+            -var "environment=${{ github.event.inputs.environment }}"

@@ -1,0 +1,15 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: site-copilot:dev
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      SITE_COPILOT_MODEL: ${SITE_COPILOT_MODEL:-claude-sonnet-4-6}
+      SITE_COPILOT_RETRIEVER: bm25
+      SITE_COPILOT_USE_MOCK_LLM: ${SITE_COPILOT_USE_MOCK_LLM:-0}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../traces:/app/traces
