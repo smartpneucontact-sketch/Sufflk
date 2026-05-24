@@ -129,18 +129,61 @@ class Agent:
 
 
 def _maybe_parse_json(text: str) -> dict[str, Any] | None:
+    """Pull a JSON object out of arbitrary LLM text.
+
+    Handles: pure JSON, JSON in ```json ... ``` fences, JSON inside an
+    explanatory paragraph, and JSON with a 'Here is the output:' preamble.
+    Picks the longest balanced top-level {...} block as the candidate.
+    """
     if not text:
         return None
+
+    # First try: clean strip + fence removal.
     candidate = text.strip()
-    # Tolerate fenced code blocks.
     if candidate.startswith("```"):
         first = candidate.find("\n")
         last = candidate.rfind("```")
-        if first != -1 and last != -1:
+        if first != -1 and last != -1 and last > first:
             candidate = candidate[first + 1 : last].strip()
-    if not (candidate.startswith("{") and candidate.endswith("}")):
-        return None
-    try:
-        return json.loads(candidate)
-    except json.JSONDecodeError:
-        return None
+    if candidate.startswith("{") and candidate.endswith("}"):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+
+    # Second try: scan the original text for the largest balanced {...} block.
+    best: str | None = None
+    depth = 0
+    start = -1
+    in_str = False
+    esc = False
+    for i, ch in enumerate(text):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+                if depth == 0 and start != -1:
+                    block = text[start : i + 1]
+                    if best is None or len(block) > len(best):
+                        best = block
+                    start = -1
+
+    if best:
+        try:
+            return json.loads(best)
+        except json.JSONDecodeError:
+            return None
+    return None
