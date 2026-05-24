@@ -1,8 +1,16 @@
-"""Fire-and-forget visitor notification via Gmail SMTP.
+"""Fire-and-forget visitor notification.
 
-When someone hits the landing page, look up their IP via the free ipapi.co
-endpoint (city, region, country, org) and email the author. Best-effort:
-never blocks the request, never raises into the request path."""
+Two transports supported — picks the first available, in this order:
+  1. Resend HTTPS API (RESEND_API_KEY) — works on Railway / any PaaS
+     because it's plain HTTPS.
+  2. Gmail SMTP (GMAIL_ADDRESS + GMAIL_APP_PASSWORD) — blocked by most
+     PaaS providers; kept as a fallback for local development.
+
+When someone hits the landing page, look up their IP via the free
+ipapi.co endpoint (city, region, country, org) and email the author.
+Best-effort: never blocks the request, never raises into the request
+path.
+"""
 
 from __future__ import annotations
 
@@ -15,7 +23,6 @@ from typing import Any
 
 import httpx
 
-# Dedup window so a single visitor refreshing doesn't spam.
 _DEDUP_TTL_SEC = 24 * 3600
 _seen_ips: dict[str, float] = {}
 
@@ -25,6 +32,10 @@ _BOT_SUBSTRINGS = (
     "headlesschrome", "lighthouse", "uptime", "pingdom", "monitor",
 )
 
+_DEFAULT_FROM = "Site Copilot <onboarding@resend.dev>"
+
+
+# === Filters ===
 
 def _is_bot(user_agent: str) -> bool:
     ua = (user_agent or "").lower()
@@ -36,7 +47,7 @@ def _is_bot(user_agent: str) -> bool:
 def _is_private_or_loopback(ip: str) -> bool:
     if not ip or ip in ("127.0.0.1", "::1", "localhost"):
         return True
-    if ":" in ip:  # IPv6 — skip private-range parsing, treat as public
+    if ":" in ip:
         return False
     parts = ip.split(".")
     if len(parts) != 4:
@@ -45,20 +56,18 @@ def _is_private_or_loopback(ip: str) -> bool:
         a, b = int(parts[0]), int(parts[1])
     except ValueError:
         return True
-    if a == 10 or a == 127:
+    if a in (10, 127):
         return True
     if a == 192 and b == 168:
         return True
     if a == 172 and 16 <= b <= 31:
         return True
-    if a == 169 and b == 254:  # link-local
+    if a == 169 and b == 254:
         return True
     return False
 
 
 def _extract_ip(request: Any) -> str:
-    # Railway/most PaaS put a proxy in front; the real client IP is in
-    # X-Forwarded-For (leftmost entry). Fall back to direct peer.
     xff = request.headers.get("x-forwarded-for", "")
     if xff:
         return xff.split(",")[0].strip()
@@ -67,6 +76,34 @@ def _extract_ip(request: Any) -> str:
         return real.strip()
     return request.client.host if request.client else ""
 
+
+# === Transport selection ===
+
+def _has_resend() -> bool:
+    return bool(os.environ.get("RESEND_API_KEY"))
+
+
+def _has_gmail() -> bool:
+    return bool(os.environ.get("GMAIL_ADDRESS")) and bool(os.environ.get("GMAIL_APP_PASSWORD"))
+
+
+def _selected_transport() -> str:
+    if _has_resend():
+        return "resend"
+    if _has_gmail():
+        return "gmail_smtp"
+    return "none"
+
+
+def _recipient() -> str:
+    return os.environ.get("NOTIFY_TO_EMAIL") or os.environ.get("GMAIL_ADDRESS") or ""
+
+
+def _from_address() -> str:
+    return os.environ.get("NOTIFY_FROM_EMAIL") or os.environ.get("GMAIL_ADDRESS") or _DEFAULT_FROM
+
+
+# === Geo lookup ===
 
 async def _lookup_ip(ip: str) -> dict[str, Any]:
     try:
@@ -81,26 +118,67 @@ async def _lookup_ip(ip: str) -> dict[str, Any]:
     return {}
 
 
-def _send_email_sync(subject: str, body: str) -> None:
+# === Send paths ===
+
+async def _send_via_resend(subject: str, body: str) -> dict[str, Any]:
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    to = _recipient()
+    sender = _from_address()
+    if not to:
+        return {"ok": False, "error": "NOTIFY_TO_EMAIL not set (and no GMAIL_ADDRESS fallback)"}
+    payload = {"from": sender, "to": [to], "subject": subject, "text": body}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                "https://api.resend.com/emails",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        if 200 <= r.status_code < 300:
+            return {"ok": True, "transport": "resend", "id": r.json().get("id")}
+        return {
+            "ok": False,
+            "transport": "resend",
+            "error": f"HTTP {r.status_code}",
+            "detail": r.text[:500],
+        }
+    except Exception as e:
+        return {"ok": False, "transport": "resend", "error": type(e).__name__, "detail": str(e)}
+
+
+def _send_via_gmail_sync(subject: str, body: str) -> dict[str, Any]:
     user = os.environ.get("GMAIL_ADDRESS")
     pw = os.environ.get("GMAIL_APP_PASSWORD")
-    to_addr = os.environ.get("NOTIFY_TO_EMAIL", user)
-    if not (user and pw and to_addr):
-        print("[site-copilot] visitor email skipped: GMAIL_ADDRESS or GMAIL_APP_PASSWORD not set", flush=True)
-        return
+    to = _recipient()
+    if not (user and pw and to):
+        return {"ok": False, "error": "GMAIL credentials or NOTIFY_TO_EMAIL not set"}
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = user
-    msg["To"] = to_addr
+    msg["To"] = to
     msg.set_content(body)
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as s:
             s.login(user, pw)
             s.send_message(msg)
-        print(f"[site-copilot] visitor email sent to {to_addr}: {subject}", flush=True)
+        return {"ok": True, "transport": "gmail_smtp"}
     except Exception as e:
-        print(f"[site-copilot] visitor email failed: {e}", flush=True)
+        return {"ok": False, "transport": "gmail_smtp", "error": type(e).__name__, "detail": str(e)}
 
+
+async def _send(subject: str, body: str) -> dict[str, Any]:
+    t = _selected_transport()
+    if t == "resend":
+        return await _send_via_resend(subject, body)
+    if t == "gmail_smtp":
+        return await asyncio.to_thread(_send_via_gmail_sync, subject, body)
+    return {"ok": False, "error": "no transport configured (set RESEND_API_KEY or GMAIL_*)"}
+
+
+# === Visitor pipeline ===
 
 async def _notify(ip: str, user_agent: str, path: str, referer: str) -> None:
     info = await _lookup_ip(ip)
@@ -121,11 +199,14 @@ async def _notify(ip: str, user_agent: str, path: str, referer: str) -> None:
         f"Referer:   {referer or '(direct)'}\n"
         f"UA:        {user_agent or 'unknown'}\n"
     )
-    await asyncio.to_thread(_send_email_sync, subject, body)
+    result = await _send(subject, body)
+    if result.get("ok"):
+        print(f"[site-copilot] visitor email sent via {result.get('transport')}: {subject}", flush=True)
+    else:
+        print(f"[site-copilot] visitor email failed: {result}", flush=True)
 
 
 async def maybe_notify_visitor(request: Any, path: str) -> None:
-    """Schedule a notification if this visit deserves one. Never blocks."""
     if os.environ.get("VISITOR_NOTIFY_ENABLED", "1") != "1":
         print("[site-copilot] visitor: skip (notify disabled by env)", flush=True)
         return
@@ -144,23 +225,22 @@ async def maybe_notify_visitor(request: Any, path: str) -> None:
         print(f"[site-copilot] visitor: skip (dedup, ip={ip}, {remaining}s left)", flush=True)
         return
     _seen_ips[ip] = now
-    # Opportunistic cleanup so the dict doesn't grow unbounded.
     if len(_seen_ips) > 2000:
         cutoff = now - _DEDUP_TTL_SEC
         for k in [k for k, v in _seen_ips.items() if v < cutoff]:
             _seen_ips.pop(k, None)
-
     referer = request.headers.get("referer", "")
-    print(f"[site-copilot] visitor: queued notify for ip={ip} ua={ua[:60]!r}", flush=True)
+    print(f"[site-copilot] visitor: queued notify for ip={ip} via {_selected_transport()}", flush=True)
     asyncio.create_task(_notify(ip, ua, path, referer))
 
 
+# === Diagnostics ===
+
 def diagnostic_status() -> dict[str, Any]:
-    """Snapshot of the notification subsystem state. Safe to expose — no
-    secrets returned, IPs masked to /24 to avoid leaking visitor IPs."""
     user = os.environ.get("GMAIL_ADDRESS")
     pw = os.environ.get("GMAIL_APP_PASSWORD")
-    to = os.environ.get("NOTIFY_TO_EMAIL") or user
+    rk = os.environ.get("RESEND_API_KEY")
+    to = _recipient()
     enabled = os.environ.get("VISITOR_NOTIFY_ENABLED", "1") == "1"
 
     masked_user = ""
@@ -184,11 +264,14 @@ def diagnostic_status() -> dict[str, Any]:
 
     return {
         "enabled": enabled,
+        "selected_transport": _selected_transport(),
+        "resend_api_key_set": bool(rk),
+        "resend_api_key_length": len(rk) if rk else 0,
         "gmail_address_set": bool(user),
         "gmail_app_password_set": bool(pw),
         "gmail_app_password_length": len(pw) if pw else 0,
         "notify_to_email_set": bool(os.environ.get("NOTIFY_TO_EMAIL")),
-        "effective_from": masked_user,
+        "effective_from": _from_address(),
         "effective_to_email_domain": (to.partition("@")[2] if to else ""),
         "deduped_ip_count": len(_seen_ips),
         "recent_seen_ips_masked": masked_recent,
@@ -196,52 +279,34 @@ def diagnostic_status() -> dict[str, Any]:
 
 
 async def smtp_login_check() -> dict[str, Any]:
-    """Verify Gmail SMTP credentials without sending an email."""
-    user = os.environ.get("GMAIL_ADDRESS")
-    pw = os.environ.get("GMAIL_APP_PASSWORD")
-    if not (user and pw):
-        return {"ok": False, "error": "GMAIL_ADDRESS or GMAIL_APP_PASSWORD not set"}
-
-    def _check() -> dict[str, Any]:
-        try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=8) as s:
-                s.login(user, pw)
-            return {"ok": True}
-        except smtplib.SMTPAuthenticationError as e:
-            return {"ok": False, "error": "SMTPAuthenticationError", "detail": str(e)}
-        except Exception as e:
-            return {"ok": False, "error": type(e).__name__, "detail": str(e)}
-
-    return await asyncio.to_thread(_check)
+    """Kept for backward-compat with the previous diagnostic. Now also
+    works as a transport-aware liveness check."""
+    t = _selected_transport()
+    if t == "resend":
+        # No equivalent 'login check' for Resend — the test send is the
+        # real check. Return a hint instead.
+        return {
+            "ok": True,
+            "transport": "resend",
+            "note": "Resend is HTTPS — there's no separate auth step. POST /api/notify/test to actually verify.",
+        }
+    if t == "gmail_smtp":
+        def _check() -> dict[str, Any]:
+            try:
+                with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=8) as s:
+                    s.login(os.environ["GMAIL_ADDRESS"], os.environ["GMAIL_APP_PASSWORD"])
+                return {"ok": True, "transport": "gmail_smtp"}
+            except Exception as e:
+                return {"ok": False, "transport": "gmail_smtp", "error": type(e).__name__, "detail": str(e)}
+        return await asyncio.to_thread(_check)
+    return {"ok": False, "error": "no transport configured"}
 
 
 async def send_test_email() -> dict[str, Any]:
-    """Force-send a test email immediately, bypassing dedup."""
-    user = os.environ.get("GMAIL_ADDRESS")
-    pw = os.environ.get("GMAIL_APP_PASSWORD")
-    to = os.environ.get("NOTIFY_TO_EMAIL") or user
-    if not (user and pw and to):
-        return {"ok": False, "error": "GMAIL_ADDRESS or GMAIL_APP_PASSWORD not set"}
-
-    def _send() -> dict[str, Any]:
-        msg = EmailMessage()
-        msg["Subject"] = "Site Copilot — visitor-notify test"
-        msg["From"] = user
-        msg["To"] = to
-        msg.set_content(
-            "This is a test from the Site Copilot deploy.\n\n"
-            "If you got this, GMAIL_ADDRESS and GMAIL_APP_PASSWORD are correctly "
-            "configured and visitor notifications will fire on the next un-deduped "
-            "page view.\n"
-        )
-        try:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as s:
-                s.login(user, pw)
-                s.send_message(msg)
-            return {"ok": True, "sent_to_domain": to.partition("@")[2]}
-        except smtplib.SMTPAuthenticationError as e:
-            return {"ok": False, "error": "SMTPAuthenticationError", "detail": str(e)}
-        except Exception as e:
-            return {"ok": False, "error": type(e).__name__, "detail": str(e)}
-
-    return await asyncio.to_thread(_send)
+    subject = "Site Copilot — visitor-notify test"
+    body = (
+        "This is a test from the Site Copilot deploy.\n\n"
+        f"Transport: {_selected_transport()}\n\n"
+        "If you received this, notifications will fire on the next un-deduped page view."
+    )
+    return await _send(subject, body)
