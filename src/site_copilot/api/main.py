@@ -71,6 +71,12 @@ async def visitor_notify(request: Request, call_next):
             await maybe_notify_visitor(request, request.url.path)
         except Exception as e:
             print(f"[site-copilot] visitor notify error: {e}", flush=True)
+    # Defeat browser caching of UI assets so users always see the latest
+    # JS/CSS without needing a hard refresh.
+    if request.url.path.startswith("/static/") or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
     return response
 
 
