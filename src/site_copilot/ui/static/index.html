@@ -3,162 +3,234 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Site Copilot — agentic RFI & Daily Report copilot</title>
+  <title>Site Copilot — agentic RFI & Daily Report assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>SC</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%23f59e0b'/></svg>">
 </head>
 <body>
-  <header class="site-header">
-    <div class="container header-inner">
-      <div>
-        <h1>Site Copilot</h1>
-        <p class="subtitle">Agentic RFI and Daily Report assistant for construction jobsites. Built for the Suffolk Site AI Engineer role.</p>
+
+<header class="topbar">
+  <div class="container topbar-inner">
+    <a href="/" class="brand">
+      <span class="brand-mark"></span>
+      <span class="brand-name">Site Copilot</span>
+    </a>
+    <nav class="topnav">
+      <a href="#agents" data-scroll>Agents</a>
+      <a href="#about" data-scroll>About</a>
+      <a href="/docs" target="_blank">API</a>
+      <a href="https://github.com/smartpneucontact-sketch/Sufflk" target="_blank">GitHub</a>
+    </nav>
+    <span class="mode-pill" id="mode-pill">
+      <span class="mode-dot"></span>
+      <span id="mode-text">loading</span>
+    </span>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <p class="eyebrow">Portfolio demo · for Suffolk Construction Site AI Engineer</p>
+    <h1 class="hero-title">
+      Agentic AI for the<br>
+      <span class="grad">construction site of the future.</span>
+    </h1>
+    <p class="hero-sub">
+      Two production-shaped agents — <strong>RFI triage</strong> and <strong>daily report drafting</strong> —
+      running on Claude Sonnet 4.6 with Agentic RAG over a synthetic project corpus.
+      Same stack vocabulary Suffolk recruits on: FastAPI, hybrid retrieval mapped to OpenSearch,
+      JSONL telemetry mapped to Databricks bronze, Terraform sketch for AWS Bedrock deploy.
+    </p>
+    <div class="hero-ctas">
+      <a href="#agents" class="btn-primary" data-scroll>Try the agents</a>
+      <a href="https://github.com/smartpneucontact-sketch/Sufflk" target="_blank" class="btn-ghost">View source</a>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat">
+        <span class="stat-label">Corpus</span>
+        <span class="stat-value" id="stat-corpus">…</span>
+        <span class="stat-help">chunks indexed</span>
       </div>
-      <div class="meta">
-        <span class="badge" id="mode-badge">Loading…</span>
-        <a href="/docs" class="link" target="_blank">API docs</a>
-        <a href="https://github.com/smartpneucontact-sketch/Sufflk" class="link" target="_blank">GitHub</a>
+      <div class="stat">
+        <span class="stat-label">Model</span>
+        <span class="stat-value mono" id="stat-model">…</span>
+        <span class="stat-help">via Anthropic SDK</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Retriever</span>
+        <span class="stat-value mono" id="stat-retriever">…</span>
+        <span class="stat-help">OpenSearch-shaped contract</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Cost / RFI</span>
+        <span class="stat-value">~$0.05</span>
+        <span class="stat-help">at Sonnet 4.6 pricing</span>
       </div>
     </div>
-  </header>
+  </div>
+</section>
 
-  <nav class="tabs container">
-    <button class="tab active" data-tab="rfi">RFI Triage</button>
-    <button class="tab" data-tab="dcr">Daily Report</button>
-    <button class="tab" data-tab="about">About</button>
-  </nav>
+<section class="section" id="agents">
+  <div class="container">
+    <div class="section-head">
+      <h2>Try it live</h2>
+      <p>Pick a sample or write your own. The agent retrieves project documents, classifies urgency, estimates impact, and drafts a citation-backed response.</p>
+    </div>
 
-  <main class="container">
-    <!-- RFI TAB -->
-    <section id="tab-rfi" class="panel active">
-      <div class="grid">
-        <div class="card">
-          <h2>Incoming RFI</h2>
-          <p class="help">Pick a sample or edit the fields. Agent will retrieve from the project corpus (5 specs, 8 prior RFIs, 3 DCRs) and draft a citation-backed response.</p>
+    <div class="tabs">
+      <button class="tab active" data-tab="rfi">
+        <span class="tab-num">01</span>
+        <span class="tab-name">RFI Triage</span>
+        <span class="tab-sub">Spec conflicts, substitutions, field questions</span>
+      </button>
+      <button class="tab" data-tab="dcr">
+        <span class="tab-num">02</span>
+        <span class="tab-name">Daily Report</span>
+        <span class="tab-sub">Raw field notes → structured DCR</span>
+      </button>
+    </div>
 
-          <label>Sample RFI
+    <!-- RFI panel -->
+    <div id="tab-rfi" class="panel active">
+      <div class="workbench">
+        <div class="pane input-pane">
+          <header class="pane-head">
+            <h3>Incoming RFI</h3>
+            <span class="muted">From subcontractor → routes to PE</span>
+          </header>
+
+          <div class="field">
+            <label>Sample</label>
             <select id="rfi-sample"></select>
-          </label>
-
-          <div class="row">
-            <label>RFI ID
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>RFI ID</label>
               <input id="rfi-id" type="text">
-            </label>
-            <label>Discipline
+            </div>
+            <div class="field">
+              <label>Discipline</label>
               <input id="rfi-discipline" type="text">
-            </label>
+            </div>
           </div>
-
-          <div class="row">
-            <label>Trade
+          <div class="field-row">
+            <div class="field">
+              <label>Trade</label>
               <input id="rfi-trade" type="text">
-            </label>
-            <label>References (comma-separated)
+            </div>
+            <div class="field">
+              <label>References</label>
               <input id="rfi-refs" type="text">
-            </label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Question</label>
+            <textarea id="rfi-question" rows="5"></textarea>
           </div>
 
-          <label>Question
-            <textarea id="rfi-question" rows="6"></textarea>
-          </label>
-
-          <button id="rfi-submit" class="primary">Triage RFI</button>
-          <div id="rfi-status" class="status"></div>
+          <button id="rfi-submit" class="btn-primary btn-full">
+            <span class="btn-text">Triage RFI</span>
+            <span class="btn-spinner" hidden></span>
+          </button>
+          <div id="rfi-status" class="status" hidden></div>
         </div>
 
-        <div class="card output-card">
-          <div class="output-header">
-            <h2>Agent output</h2>
-            <span id="rfi-telemetry" class="telemetry"></span>
+        <div class="pane output-pane" id="rfi-output-pane">
+          <div class="empty-state" id="rfi-empty">
+            <div class="empty-icon">↗</div>
+            <h4>Awaiting RFI</h4>
+            <p>Click <em>Triage RFI</em> to watch the agent retrieve from the corpus, classify urgency, and draft a response with citations.</p>
           </div>
-          <div id="rfi-output" class="output">
-            <p class="placeholder">Run the agent to see the structured response, tool invocations, and telemetry.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- DCR TAB -->
-    <section id="tab-dcr" class="panel">
-      <div class="grid">
-        <div class="card">
-          <h2>Field notes</h2>
-          <p class="help">Paste end-of-shift superintendent notes (any shape — fragments and abbreviations welcome). Agent normalizes into a structured DCR with risks bucketed and follow-ups in imperative voice.</p>
-
-          <label>Sample
-            <select id="dcr-sample"></select>
-          </label>
-
-          <div class="row">
-            <label>Date
-              <input id="dcr-date" type="text">
-            </label>
-            <label>Author
-              <input id="dcr-author" type="text">
-            </label>
-          </div>
-
-          <label>Raw field notes
-            <textarea id="dcr-notes" rows="14"></textarea>
-          </label>
-
-          <button id="dcr-submit" class="primary">Draft DCR</button>
-          <div id="dcr-status" class="status"></div>
-        </div>
-
-        <div class="card output-card">
-          <div class="output-header">
-            <h2>Agent output</h2>
-            <span id="dcr-telemetry" class="telemetry"></span>
-          </div>
-          <div id="dcr-output" class="output">
-            <p class="placeholder">Run the agent to see the structured DCR.</p>
-          </div>
+          <div id="rfi-result" hidden></div>
         </div>
       </div>
-    </section>
-
-    <!-- ABOUT TAB -->
-    <section id="tab-about" class="panel">
-      <div class="card prose">
-        <h2>What this is</h2>
-        <p>Two AI agents running on the same stack vocabulary Suffolk recruits on, against a synthetic construction corpus (Allerton Tower — a fictional 32-story Boston project named after Suffolk's HQ address).</p>
-
-        <h3>Stack mapping</h3>
-        <table>
-          <thead><tr><th>This demo</th><th>Suffolk's production stack</th></tr></thead>
-          <tbody>
-            <tr><td>Anthropic SDK + Claude</td><td>AWS Bedrock (Claude Sonnet 4.6)</td></tr>
-            <tr><td>BM25 (+ optional Chroma)</td><td>OpenSearch hybrid (BM25 + kNN)</td></tr>
-            <tr><td>FastAPI + Pydantic</td><td>FastAPI + Pydantic</td></tr>
-            <tr><td>JSONL traces on disk</td><td>CloudWatch → Databricks bronze</td></tr>
-            <tr><td>This page</td><td>Teams / SharePoint app</td></tr>
-            <tr><td>GitHub Actions CI</td><td>GitHub Actions CI</td></tr>
-            <tr><td>infra/terraform/ sketch</td><td>Production Terraform</td></tr>
-          </tbody>
-        </table>
-
-        <h3>What's in the agent loop</h3>
-        <ul>
-          <li><strong>retrieve</strong> — hybrid lexical search over project corpus, returns chunks with citations.</li>
-          <li><strong>classify_urgency</strong> — low / medium / high based on safety + critical-path + days-until-affected-activity.</li>
-          <li><strong>estimate_impact</strong> — rough order-of-magnitude cost and schedule deltas.</li>
-        </ul>
-
-        <h3>What this is <em>not</em></h3>
-        <p>A one-week portfolio demo, not a production deploy. The corpus is synthetic but realistic. The Terraform deploys infra but no autoscaling or alarms. Procore / OpenSpace integrations are the natural next two — see the <a href="https://github.com/smartpneucontact-sketch/Sufflk/blob/main/README.md" target="_blank">README</a> for the honest gaps list.</p>
-
-        <p class="muted">Source: <a href="https://github.com/smartpneucontact-sketch/Sufflk" target="_blank">github.com/smartpneucontact-sketch/Sufflk</a></p>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="container">
-      <p>Site Copilot v0.1.0 · <span id="footer-mode">…</span> · <a href="/healthz" target="_blank">/healthz</a> · <a href="/api" target="_blank">/api</a></p>
     </div>
-  </footer>
 
-  <script src="/static/app.js"></script>
+    <!-- DCR panel -->
+    <div id="tab-dcr" class="panel">
+      <div class="workbench">
+        <div class="pane input-pane">
+          <header class="pane-head">
+            <h3>Field notes</h3>
+            <span class="muted">End-of-shift dump from the Super</span>
+          </header>
+
+          <div class="field">
+            <label>Sample</label>
+            <select id="dcr-sample"></select>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Date</label>
+              <input id="dcr-date" type="text">
+            </div>
+            <div class="field">
+              <label>Author</label>
+              <input id="dcr-author" type="text">
+            </div>
+          </div>
+          <div class="field">
+            <label>Raw field notes</label>
+            <textarea id="dcr-notes" rows="14"></textarea>
+          </div>
+
+          <button id="dcr-submit" class="btn-primary btn-full">
+            <span class="btn-text">Draft DCR</span>
+            <span class="btn-spinner" hidden></span>
+          </button>
+          <div id="dcr-status" class="status" hidden></div>
+        </div>
+
+        <div class="pane output-pane" id="dcr-output-pane">
+          <div class="empty-state" id="dcr-empty">
+            <div class="empty-icon">↗</div>
+            <h4>Awaiting field notes</h4>
+            <p>Click <em>Draft DCR</em> to turn sloppy field notes into a structured Daily Construction Report with risks bucketed.</p>
+          </div>
+          <div id="dcr-result" hidden></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt" id="about">
+  <div class="container about-grid">
+    <div>
+      <h2>How it maps to Suffolk's named stack</h2>
+      <p class="muted">Every component in this demo has a 1:1 production target. The swap from local to deployed AWS is mechanical, not architectural.</p>
+    </div>
+    <table class="map-table">
+      <thead><tr><th>This demo</th><th>Suffolk production</th></tr></thead>
+      <tbody>
+        <tr><td>Anthropic SDK + Claude Sonnet 4.6</td><td>AWS Bedrock <code>anthropic.claude-sonnet-4-6</code></td></tr>
+        <tr><td>BM25 + Chroma, fused via RRF</td><td>OpenSearch hybrid (BM25 + kNN)</td></tr>
+        <tr><td>FastAPI + Pydantic</td><td>FastAPI + Pydantic</td></tr>
+        <tr><td>JSONL traces on disk</td><td>CloudWatch → Databricks bronze</td></tr>
+        <tr><td>This single-page UI</td><td>Teams / SharePoint apps</td></tr>
+        <tr><td>GitHub Actions CI (lint + tests + eval gate)</td><td>Same</td></tr>
+        <tr><td><code>infra/terraform/</code> sketch</td><td>Production Terraform</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <span>Site Copilot v0.1.0 · <span id="footer-mode">…</span></span>
+    <span>
+      <a href="/healthz" target="_blank">/healthz</a> ·
+      <a href="/api" target="_blank">/api</a> ·
+      <a href="/docs" target="_blank">/docs</a> ·
+      <a href="https://github.com/smartpneucontact-sketch/Sufflk" target="_blank">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+<script src="/static/app.js"></script>
 </body>
 </html>
