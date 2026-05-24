@@ -127,16 +127,21 @@ async def _notify(ip: str, user_agent: str, path: str, referer: str) -> None:
 async def maybe_notify_visitor(request: Any, path: str) -> None:
     """Schedule a notification if this visit deserves one. Never blocks."""
     if os.environ.get("VISITOR_NOTIFY_ENABLED", "1") != "1":
+        print("[site-copilot] visitor: skip (notify disabled by env)", flush=True)
         return
     ip = _extract_ip(request)
     if _is_private_or_loopback(ip):
+        print(f"[site-copilot] visitor: skip (private/loopback ip={ip!r})", flush=True)
         return
     ua = request.headers.get("user-agent", "")
     if _is_bot(ua):
+        print(f"[site-copilot] visitor: skip (bot ua={ua[:80]!r})", flush=True)
         return
     now = time.time()
     last = _seen_ips.get(ip, 0)
     if now - last < _DEDUP_TTL_SEC:
+        remaining = int(_DEDUP_TTL_SEC - (now - last))
+        print(f"[site-copilot] visitor: skip (dedup, ip={ip}, {remaining}s left)", flush=True)
         return
     _seen_ips[ip] = now
     # Opportunistic cleanup so the dict doesn't grow unbounded.
@@ -146,4 +151,97 @@ async def maybe_notify_visitor(request: Any, path: str) -> None:
             _seen_ips.pop(k, None)
 
     referer = request.headers.get("referer", "")
+    print(f"[site-copilot] visitor: queued notify for ip={ip} ua={ua[:60]!r}", flush=True)
     asyncio.create_task(_notify(ip, ua, path, referer))
+
+
+def diagnostic_status() -> dict[str, Any]:
+    """Snapshot of the notification subsystem state. Safe to expose — no
+    secrets returned, IPs masked to /24 to avoid leaking visitor IPs."""
+    user = os.environ.get("GMAIL_ADDRESS")
+    pw = os.environ.get("GMAIL_APP_PASSWORD")
+    to = os.environ.get("NOTIFY_TO_EMAIL") or user
+    enabled = os.environ.get("VISITOR_NOTIFY_ENABLED", "1") == "1"
+
+    masked_user = ""
+    if user:
+        local, _, domain = user.partition("@")
+        if local and domain:
+            masked_user = f"{local[:2]}***@{domain}"
+
+    now = time.time()
+    recent = sorted(
+        ((ip, int(now - ts)) for ip, ts in _seen_ips.items()),
+        key=lambda x: x[1],
+    )[:10]
+    masked_recent = []
+    for ip, age in recent:
+        if "." in ip:
+            parts = ip.split(".")
+            masked_recent.append({"ip": ".".join(parts[:3] + ["x"]), "seconds_ago": age})
+        else:
+            masked_recent.append({"ip": "(ipv6)", "seconds_ago": age})
+
+    return {
+        "enabled": enabled,
+        "gmail_address_set": bool(user),
+        "gmail_app_password_set": bool(pw),
+        "gmail_app_password_length": len(pw) if pw else 0,
+        "notify_to_email_set": bool(os.environ.get("NOTIFY_TO_EMAIL")),
+        "effective_from": masked_user,
+        "effective_to_email_domain": (to.partition("@")[2] if to else ""),
+        "deduped_ip_count": len(_seen_ips),
+        "recent_seen_ips_masked": masked_recent,
+    }
+
+
+async def smtp_login_check() -> dict[str, Any]:
+    """Verify Gmail SMTP credentials without sending an email."""
+    user = os.environ.get("GMAIL_ADDRESS")
+    pw = os.environ.get("GMAIL_APP_PASSWORD")
+    if not (user and pw):
+        return {"ok": False, "error": "GMAIL_ADDRESS or GMAIL_APP_PASSWORD not set"}
+
+    def _check() -> dict[str, Any]:
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=8) as s:
+                s.login(user, pw)
+            return {"ok": True}
+        except smtplib.SMTPAuthenticationError as e:
+            return {"ok": False, "error": "SMTPAuthenticationError", "detail": str(e)}
+        except Exception as e:
+            return {"ok": False, "error": type(e).__name__, "detail": str(e)}
+
+    return await asyncio.to_thread(_check)
+
+
+async def send_test_email() -> dict[str, Any]:
+    """Force-send a test email immediately, bypassing dedup."""
+    user = os.environ.get("GMAIL_ADDRESS")
+    pw = os.environ.get("GMAIL_APP_PASSWORD")
+    to = os.environ.get("NOTIFY_TO_EMAIL") or user
+    if not (user and pw and to):
+        return {"ok": False, "error": "GMAIL_ADDRESS or GMAIL_APP_PASSWORD not set"}
+
+    def _send() -> dict[str, Any]:
+        msg = EmailMessage()
+        msg["Subject"] = "Site Copilot — visitor-notify test"
+        msg["From"] = user
+        msg["To"] = to
+        msg.set_content(
+            "This is a test from the Site Copilot deploy.\n\n"
+            "If you got this, GMAIL_ADDRESS and GMAIL_APP_PASSWORD are correctly "
+            "configured and visitor notifications will fire on the next un-deduped "
+            "page view.\n"
+        )
+        try:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as s:
+                s.login(user, pw)
+                s.send_message(msg)
+            return {"ok": True, "sent_to_domain": to.partition("@")[2]}
+        except smtplib.SMTPAuthenticationError as e:
+            return {"ok": False, "error": "SMTPAuthenticationError", "detail": str(e)}
+        except Exception as e:
+            return {"ok": False, "error": type(e).__name__, "detail": str(e)}
+
+    return await asyncio.to_thread(_send)

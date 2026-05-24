@@ -12,7 +12,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from site_copilot.api.deps import AppState, build_app_state
-from site_copilot.notifications import maybe_notify_visitor
+from site_copilot.notifications import (
+    diagnostic_status,
+    maybe_notify_visitor,
+    send_test_email,
+    smtp_login_check,
+)
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "ui" / "static"
 _SAMPLES_DIR = Path("data/samples")
@@ -166,6 +171,21 @@ def triage_rfi(payload: RFIPayload, request: Request) -> AgentResponse:
 def draft_dcr(payload: FieldNotesPayload, request: Request) -> AgentResponse:
     s = _state(request)
     return _run_agent_or_error(s.dcr_agent.run_field_notes, payload.model_dump(), "daily_report")
+
+
+@app.get("/api/notify/diag", include_in_schema=False)
+def notify_diag() -> dict[str, Any]:
+    return diagnostic_status()
+
+
+@app.get("/api/notify/smtp-check", include_in_schema=False)
+async def notify_smtp_check() -> dict[str, Any]:
+    return await smtp_login_check()
+
+
+@app.post("/api/notify/test", include_in_schema=False)
+async def notify_test() -> dict[str, Any]:
+    return await send_test_email()
 
 
 @app.get("/traces/recent")
