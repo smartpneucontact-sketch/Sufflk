@@ -89,7 +89,7 @@ class Agent:
 
                 tool_result_blocks: list[dict[str, Any]] = []
                 for tc in resp.tool_calls:
-                    with self.tracer.span("tool.call", name=tc["name"], step=step):
+                    with self.tracer.span("tool.call", tool_name=tc["name"], step=step):
                         result = self.tools.call(tc["name"], tc["input"])
                     tool_invocations.append({"step": step, "name": tc["name"], "input": tc["input"], "result": result})
                     tool_result_blocks.append(
