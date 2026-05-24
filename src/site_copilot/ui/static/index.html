@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Site Copilot — agentic RFI & Daily Report copilot</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>SC</text></svg>">
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div>
+        <h1>Site Copilot</h1>
+        <p class="subtitle">Agentic RFI and Daily Report assistant for construction jobsites. Built for the Suffolk Site AI Engineer role.</p>
+      </div>
+      <div class="meta">
+        <span class="badge" id="mode-badge">Loading…</span>
+        <a href="/docs" class="link" target="_blank">API docs</a>
+        <a href="https://github.com/smartpneucontact-sketch/Sufflk" class="link" target="_blank">GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs container">
+    <button class="tab active" data-tab="rfi">RFI Triage</button>
+    <button class="tab" data-tab="dcr">Daily Report</button>
+    <button class="tab" data-tab="about">About</button>
+  </nav>
+
+  <main class="container">
+    <!-- RFI TAB -->
+    <section id="tab-rfi" class="panel active">
+      <div class="grid">
+        <div class="card">
+          <h2>Incoming RFI</h2>
+          <p class="help">Pick a sample or edit the fields. Agent will retrieve from the project corpus (5 specs, 8 prior RFIs, 3 DCRs) and draft a citation-backed response.</p>
+
+          <label>Sample RFI
+            <select id="rfi-sample"></select>
+          </label>
+
+          <div class="row">
+            <label>RFI ID
+              <input id="rfi-id" type="text">
+            </label>
+            <label>Discipline
+              <input id="rfi-discipline" type="text">
+            </label>
+          </div>
+
+          <div class="row">
+            <label>Trade
+              <input id="rfi-trade" type="text">
+            </label>
+            <label>References (comma-separated)
+              <input id="rfi-refs" type="text">
+            </label>
+          </div>
+
+          <label>Question
+            <textarea id="rfi-question" rows="6"></textarea>
+          </label>
+
+          <button id="rfi-submit" class="primary">Triage RFI</button>
+          <div id="rfi-status" class="status"></div>
+        </div>
+
+        <div class="card output-card">
+          <div class="output-header">
+            <h2>Agent output</h2>
+            <span id="rfi-telemetry" class="telemetry"></span>
+          </div>
+          <div id="rfi-output" class="output">
+            <p class="placeholder">Run the agent to see the structured response, tool invocations, and telemetry.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DCR TAB -->
+    <section id="tab-dcr" class="panel">
+      <div class="grid">
+        <div class="card">
+          <h2>Field notes</h2>
+          <p class="help">Paste end-of-shift superintendent notes (any shape — fragments and abbreviations welcome). Agent normalizes into a structured DCR with risks bucketed and follow-ups in imperative voice.</p>
+
+          <label>Sample
+            <select id="dcr-sample"></select>
+          </label>
+
+          <div class="row">
+            <label>Date
+              <input id="dcr-date" type="text">
+            </label>
+            <label>Author
+              <input id="dcr-author" type="text">
+            </label>
+          </div>
+
+          <label>Raw field notes
+            <textarea id="dcr-notes" rows="14"></textarea>
+          </label>
+
+          <button id="dcr-submit" class="primary">Draft DCR</button>
+          <div id="dcr-status" class="status"></div>
+        </div>
+
+        <div class="card output-card">
+          <div class="output-header">
+            <h2>Agent output</h2>
+            <span id="dcr-telemetry" class="telemetry"></span>
+          </div>
+          <div id="dcr-output" class="output">
+            <p class="placeholder">Run the agent to see the structured DCR.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT TAB -->
+    <section id="tab-about" class="panel">
+      <div class="card prose">
+        <h2>What this is</h2>
+        <p>Two AI agents running on the same stack vocabulary Suffolk recruits on, against a synthetic construction corpus (Allerton Tower — a fictional 32-story Boston project named after Suffolk's HQ address).</p>
+
+        <h3>Stack mapping</h3>
+        <table>
+          <thead><tr><th>This demo</th><th>Suffolk's production stack</th></tr></thead>
+          <tbody>
+            <tr><td>Anthropic SDK + Claude</td><td>AWS Bedrock (Claude Sonnet 4.6)</td></tr>
+            <tr><td>BM25 (+ optional Chroma)</td><td>OpenSearch hybrid (BM25 + kNN)</td></tr>
+            <tr><td>FastAPI + Pydantic</td><td>FastAPI + Pydantic</td></tr>
+            <tr><td>JSONL traces on disk</td><td>CloudWatch → Databricks bronze</td></tr>
+            <tr><td>This page</td><td>Teams / SharePoint app</td></tr>
+            <tr><td>GitHub Actions CI</td><td>GitHub Actions CI</td></tr>
+            <tr><td>infra/terraform/ sketch</td><td>Production Terraform</td></tr>
+          </tbody>
+        </table>
+
+        <h3>What's in the agent loop</h3>
+        <ul>
+          <li><strong>retrieve</strong> — hybrid lexical search over project corpus, returns chunks with citations.</li>
+          <li><strong>classify_urgency</strong> — low / medium / high based on safety + critical-path + days-until-affected-activity.</li>
+          <li><strong>estimate_impact</strong> — rough order-of-magnitude cost and schedule deltas.</li>
+        </ul>
+
+        <h3>What this is <em>not</em></h3>
+        <p>A one-week portfolio demo, not a production deploy. The corpus is synthetic but realistic. The Terraform deploys infra but no autoscaling or alarms. Procore / OpenSpace integrations are the natural next two — see the <a href="https://github.com/smartpneucontact-sketch/Sufflk/blob/main/README.md" target="_blank">README</a> for the honest gaps list.</p>
+
+        <p class="muted">Source: <a href="https://github.com/smartpneucontact-sketch/Sufflk" target="_blank">github.com/smartpneucontact-sketch/Sufflk</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>Site Copilot v0.1.0 · <span id="footer-mode">…</span> · <a href="/healthz" target="_blank">/healthz</a> · <a href="/api" target="_blank">/api</a></p>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

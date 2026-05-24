@@ -2,12 +2,18 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from site_copilot.api.deps import AppState, build_app_state
+
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "ui" / "static"
+_SAMPLES_DIR = Path("data/samples")
 
 
 class RFIPayload(BaseModel):
@@ -69,23 +75,42 @@ def healthz(request: Request) -> dict[str, Any]:
     }
 
 
-@app.get("/")
-def root(request: Request) -> dict[str, Any]:
-    """Friendly landing endpoint so a browser hitting the bare URL gets something useful."""
+@app.get("/api", include_in_schema=False)
+def api_info(request: Request) -> dict[str, Any]:
+    """Machine-readable service description (was at / before the HTML UI shipped)."""
     s = _state(request)
     return {
         "service": "Site Copilot",
         "version": "0.1.0",
         "description": "Agentic RFI + Daily Report copilot for construction jobsites.",
         "endpoints": {
+            "GET /": "HTML UI.",
             "POST /agents/rfi/triage": "Triage an incoming RFI.",
             "POST /agents/daily-report/draft": "Draft a structured DCR from raw field notes.",
             "GET /healthz": "Liveness + model/retriever status.",
             "GET /traces/recent": "Recent tracer events (latency, tokens, cost).",
+            "GET /api/samples/rfi": "Sample RFI inbox.",
+            "GET /api/samples/dcr": "Sample superintendent field notes.",
             "GET /docs": "OpenAPI / Swagger UI.",
         },
         "mode": "MOCK (canned responses)" if s.rfi_agent.llm.use_mock else f"LIVE ({s.settings.model})",
     }
+
+
+@app.get("/api/samples/rfi", include_in_schema=False)
+def sample_rfis() -> list[dict[str, Any]]:
+    p = _SAMPLES_DIR / "rfi_inbox.json"
+    if not p.exists():
+        return []
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+@app.get("/api/samples/dcr", include_in_schema=False)
+def sample_dcrs() -> list[dict[str, Any]]:
+    p = _SAMPLES_DIR / "field_notes.json"
+    if not p.exists():
+        return []
+    return json.loads(p.read_text(encoding="utf-8"))
 
 
 @app.post("/agents/rfi/triage", response_model=AgentResponse)
@@ -135,3 +160,15 @@ def traces_recent(request: Request, limit: int = 100) -> dict[str, Any]:
     lines = p.read_text(encoding="utf-8").splitlines()[-limit:]
     events = [json.loads(line) for line in lines if line.strip()]
     return {"events": events, "count": len(events)}
+
+
+# --- HTML UI ---
+# Mounted last so explicit routes above always win. /static serves CSS/JS;
+# / returns the single-page HTML.
+
+if _STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def index() -> FileResponse:
+        return FileResponse(_STATIC_DIR / "index.html")
