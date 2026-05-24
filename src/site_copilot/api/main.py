@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from site_copilot.api.deps import AppState, build_app_state
+from site_copilot.notifications import maybe_notify_visitor
 
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "ui" / "static"
 _SAMPLES_DIR = Path("data/samples")
@@ -57,6 +58,19 @@ app = FastAPI(
     ),
     lifespan=lifespan,
 )
+
+
+@app.middleware("http")
+async def visitor_notify(request: Request, call_next):
+    response = await call_next(request)
+    # Only notify on the landing-page HTML hit — not API calls, static assets,
+    # or health checks. Schedules a background task; never blocks the response.
+    if request.method == "GET" and request.url.path == "/":
+        try:
+            await maybe_notify_visitor(request, request.url.path)
+        except Exception as e:
+            print(f"[site-copilot] visitor notify error: {e}", flush=True)
+    return response
 
 
 def _state(request: Request) -> AppState:
