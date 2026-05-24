@@ -46,12 +46,18 @@ class LLMClient:
         self.model = model
         self.use_mock = use_mock or os.environ.get("SITE_COPILOT_USE_MOCK_LLM") == "1"
         self._client: Anthropic | None = None
+        if not self.use_mock and not api_key:
+            # Graceful fallback for unattended deploys (Railway, Render, etc.):
+            # boot in mock mode rather than crashing the container. /healthz
+            # surfaces the mode so reviewers know what they're looking at.
+            print(
+                "[site-copilot] WARNING: ANTHROPIC_API_KEY not set; "
+                "falling back to mock LLM. Set the key (or SITE_COPILOT_USE_MOCK_LLM=1 "
+                "to silence this warning) for live Claude responses.",
+                flush=True,
+            )
+            self.use_mock = True
         if not self.use_mock:
-            if not api_key:
-                raise RuntimeError(
-                    "ANTHROPIC_API_KEY not set. Either provide it or set "
-                    "SITE_COPILOT_USE_MOCK_LLM=1 to run with canned responses."
-                )
             self._client = Anthropic(api_key=api_key)
 
     def complete(

@@ -65,7 +65,26 @@ def healthz(request: Request) -> dict[str, Any]:
         "model": s.settings.model,
         "retriever": s.settings.retriever,
         "corpus_chunks": s.retriever.size(),
-        "use_mock_llm": s.settings.use_mock_llm,
+        "use_mock_llm": s.rfi_agent.llm.use_mock,
+    }
+
+
+@app.get("/")
+def root(request: Request) -> dict[str, Any]:
+    """Friendly landing endpoint so a browser hitting the bare URL gets something useful."""
+    s = _state(request)
+    return {
+        "service": "Site Copilot",
+        "version": "0.1.0",
+        "description": "Agentic RFI + Daily Report copilot for construction jobsites.",
+        "endpoints": {
+            "POST /agents/rfi/triage": "Triage an incoming RFI.",
+            "POST /agents/daily-report/draft": "Draft a structured DCR from raw field notes.",
+            "GET /healthz": "Liveness + model/retriever status.",
+            "GET /traces/recent": "Recent tracer events (latency, tokens, cost).",
+            "GET /docs": "OpenAPI / Swagger UI.",
+        },
+        "mode": "MOCK (canned responses)" if s.rfi_agent.llm.use_mock else f"LIVE ({s.settings.model})",
     }
 
 
