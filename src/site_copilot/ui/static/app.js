@@ -107,7 +107,18 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        let detail = `HTTP ${resp.status}`;
+        try {
+          const body = await resp.json();
+          if (body.detail) {
+            detail = typeof body.detail === "string"
+              ? `${detail}: ${body.detail}`
+              : `${detail}: ${body.detail.error || ""} — ${body.detail.message || JSON.stringify(body.detail)}`;
+          }
+        } catch (_) { /* body wasn't JSON */ }
+        throw new Error(detail);
+      }
       const result = await resp.json();
       const wallMs = Math.round(performance.now() - t0);
       renderAgentResult(output, telemetry, result, wallMs);
@@ -148,7 +159,18 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) {
+        let detail = `HTTP ${resp.status}`;
+        try {
+          const body = await resp.json();
+          if (body.detail) {
+            detail = typeof body.detail === "string"
+              ? `${detail}: ${body.detail}`
+              : `${detail}: ${body.detail.error || ""} — ${body.detail.message || JSON.stringify(body.detail)}`;
+          }
+        } catch (_) { /* body wasn't JSON */ }
+        throw new Error(detail);
+      }
       const result = await resp.json();
       const wallMs = Math.round(performance.now() - t0);
       renderAgentResult(output, telemetry, result, wallMs);

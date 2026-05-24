@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -127,13 +128,16 @@ def sample_dcrs() -> list[dict[str, Any]]:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-@app.post("/agents/rfi/triage", response_model=AgentResponse)
-def triage_rfi(payload: RFIPayload, request: Request) -> AgentResponse:
-    s = _state(request)
+def _run_agent_or_error(fn, payload: dict[str, Any], agent_name: str) -> AgentResponse:
     try:
-        result = s.rfi_agent.run_rfi(payload.model_dump())
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        result = fn(payload)
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[site-copilot] {agent_name} failed: {type(e).__name__}: {e}\n{tb}", flush=True)
+        raise HTTPException(
+            status_code=500,
+            detail={"error": type(e).__name__, "message": str(e), "agent": agent_name},
+        )
     return AgentResponse(
         run_id=result.run_id,
         parsed=result.parsed,
@@ -144,25 +148,18 @@ def triage_rfi(payload: RFIPayload, request: Request) -> AgentResponse:
         cost_usd=round(result.cost_usd, 6),
         tool_invocations=result.tool_invocations,
     )
+
+
+@app.post("/agents/rfi/triage", response_model=AgentResponse)
+def triage_rfi(payload: RFIPayload, request: Request) -> AgentResponse:
+    s = _state(request)
+    return _run_agent_or_error(s.rfi_agent.run_rfi, payload.model_dump(), "rfi_triage")
 
 
 @app.post("/agents/daily-report/draft", response_model=AgentResponse)
 def draft_dcr(payload: FieldNotesPayload, request: Request) -> AgentResponse:
     s = _state(request)
-    try:
-        result = s.dcr_agent.run_field_notes(payload.model_dump())
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    return AgentResponse(
-        run_id=result.run_id,
-        parsed=result.parsed,
-        final_text=result.final_text,
-        steps=result.steps,
-        input_tokens=result.input_tokens,
-        output_tokens=result.output_tokens,
-        cost_usd=round(result.cost_usd, 6),
-        tool_invocations=result.tool_invocations,
-    )
+    return _run_agent_or_error(s.dcr_agent.run_field_notes, payload.model_dump(), "daily_report")
 
 
 @app.get("/traces/recent")
