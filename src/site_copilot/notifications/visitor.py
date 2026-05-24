@@ -100,7 +100,17 @@ def _recipient() -> str:
 
 
 def _from_address() -> str:
-    return os.environ.get("NOTIFY_FROM_EMAIL") or os.environ.get("GMAIL_ADDRESS") or _DEFAULT_FROM
+    # Explicit override always wins.
+    explicit = os.environ.get("NOTIFY_FROM_EMAIL")
+    if explicit:
+        return explicit
+    # For Resend, default to its sandbox sender — using GMAIL_ADDRESS here
+    # would be rejected because gmail.com isn't a domain the user has
+    # verified through Resend.
+    if _has_resend():
+        return _DEFAULT_FROM
+    # For Gmail SMTP, From must be the authenticated mailbox.
+    return os.environ.get("GMAIL_ADDRESS") or _DEFAULT_FROM
 
 
 # === Geo lookup ===
