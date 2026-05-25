@@ -8,6 +8,8 @@ Output:
     Site_Copilot_Brief.pdf  (in the repo root)
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from fpdf import FPDF
@@ -96,7 +98,63 @@ def bullets(pdf: FPDF, items: list[str], size: int = 10.5) -> None:
         pdf.multi_cell(CONTENT_W - 16, 15, item, new_x="LMARGIN", new_y="NEXT")
 
 
+def hero_link_card(
+    pdf: FPDF,
+    primary_url: str,
+    primary_display: str,
+    sub_lines: list[tuple[str, str, str | None]],
+) -> None:
+    """Big amber callout with one giant clickable URL on top and smaller
+    rows underneath. sub_lines is [(label, value, optional_url)]."""
+    y0 = pdf.get_y()
+    height = 36 + 28 + 18 * len(sub_lines) + 14  # title + url + rows + padding
+
+    pdf.set_fill_color(*ACCENT_SOFT)
+    pdf.set_draw_color(*ACCENT)
+    pdf.set_line_width(1.0)
+    pdf.rect(MARGIN, y0, CONTENT_W, height, "DF")
+    # Accent left rail
+    pdf.set_fill_color(*ACCENT)
+    pdf.rect(MARGIN, y0, 4, height, "F")
+
+    # Title row
+    pdf.set_xy(MARGIN + 18, y0 + 12)
+    pdf.set_font(FONT_FAMILY, "B", 9)
+    pdf.set_text_color(*ACCENT)
+    pdf.cell(0, 12, "OPEN THE LIVE DEMO", new_x="LMARGIN", new_y="NEXT")
+
+    # The big clickable URL
+    pdf.set_x(MARGIN + 18)
+    pdf.set_font(FONT_FAMILY, "B", 17)
+    pdf.set_text_color(*INK)
+    url_width = CONTENT_W - 36
+    pdf.cell(url_width, 26, primary_display, new_x="LMARGIN", new_y="NEXT", link=primary_url)
+    # Underline the URL
+    pdf.set_draw_color(*ACCENT)
+    pdf.set_line_width(0.8)
+    text_w = pdf.get_string_width(primary_display)
+    pdf.line(MARGIN + 18, y0 + 12 + 12 + 22, MARGIN + 18 + text_w, y0 + 12 + 12 + 22)
+
+    pdf.ln(4)
+    # Sub-rows
+    for label, value, url in sub_lines:
+        pdf.set_x(MARGIN + 18)
+        pdf.set_font(FONT_FAMILY, "B", 10)
+        pdf.set_text_color(*INK)
+        pdf.cell(80, 16, label)
+        pdf.set_font(FONT_FAMILY, "", 10)
+        if url:
+            pdf.set_text_color(*ACCENT)
+            pdf.cell(0, 16, value, new_x="LMARGIN", new_y="NEXT", link=url)
+        else:
+            pdf.set_text_color(*INK_SOFT)
+            pdf.cell(0, 16, value, new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_y(y0 + height + 12)
+
+
 def callout(pdf: FPDF, title: str, lines: list[tuple[str, str]]) -> None:
+    """Legacy small callout (kept for backwards compatibility)."""
     y0 = pdf.get_y()
     height = 24 + 18 * len(lines) + 8
     pdf.set_fill_color(*ACCENT_SOFT)
@@ -257,17 +315,23 @@ def build() -> Path:
     pdf.cell(0, 14, "Arsen Khanguieldyan", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font(FONT_FAMILY, "", 10)
     pdf.set_text_color(*INK_SOFT)
-    pdf.cell(0, 14, "arsen.khanguieldyan@gmail.com", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 14, "arsen.khanguieldyan@gmail.com", new_x="LMARGIN", new_y="NEXT",
+             link="mailto:arsen.khanguieldyan@gmail.com")
     pdf.cell(0, 14, "Portfolio piece for Suffolk Construction",
              new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(8)
+    pdf.ln(10)
 
-    # Live demo callout
-    callout(pdf, "Try it live", [
-        ("Live demo", "suffolk-construction.up.railway.app"),
-        ("Source code", "github.com/smartpneucontact-sketch/Sufflk"),
-        ("Model", "Anthropic Claude Sonnet 4.6  ·  ~$0.05 per RFI triage"),
-    ])
+    # Big clickable live-demo card (the primary CTA of the document)
+    hero_link_card(
+        pdf,
+        primary_url="https://suffolk-construction.up.railway.app",
+        primary_display="suffolk-construction.up.railway.app",
+        sub_lines=[
+            ("Source code", "github.com/smartpneucontact-sketch/Sufflk",
+             "https://github.com/smartpneucontact-sketch/Sufflk"),
+            ("Model", "Anthropic Claude Sonnet 4.6  ·  ~$0.05 per RFI triage", None),
+        ],
+    )
 
     # Summary
     h2(pdf, "Summary")
